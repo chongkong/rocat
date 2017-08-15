@@ -1,4 +1,9 @@
+import uuid
+
+import rocat
+import rocat.actor
 import rocat.finder
+import rocat.globals
 
 _roles = {}
 
@@ -8,22 +13,28 @@ def find_role(role_name):
 
 
 class BaseActorRole(object):
-    def __init__(self, name, *, ptype=dict):
+    def __init__(self, name):
         assert name not in _roles, f'Role name "{name}" is already used'
         _roles[name] = self
         self.name = name
-        self.ptype = ptype
 
     def resolve_action(self, m):
         raise NotImplementedError
 
-    def create(self, name=None, loop=None):
-        return rocat.finder.create(self, name=name, loop=loop)
+    def create(self, props=None, *, name=None, executor=None):
+        if props is None:
+            props = {}
+        if name is None:
+            name = str(uuid.uuid4())
+        if executor is None:
+            executor = rocat.globals.g.executor
+        actor = rocat.actor.Actor(self.name, props, name=name, loop=executor.loop)
+        return rocat.finder.register(self, actor)
 
 
 class DictFieldRole(BaseActorRole):
-    def __init__(self, name, *, router='type', ptype=dict):
-        super().__init__(name, ptype=ptype)
+    def __init__(self, name, *, router='type'):
+        super().__init__(name)
         self.router = router
         self.routes = {}
 

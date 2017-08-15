@@ -4,6 +4,7 @@ import logging
 import rocat.message
 import rocat.role
 import rocat.ref
+import rocat.finder
 
 
 class ActorContext(object):
@@ -25,18 +26,45 @@ class ActorContext(object):
 
     @property
     def p(self):
-        return self._actor.p
+        return self._actor.props
+
+    @property
+    def name(self):
+        return self._actor.name
+
+    @property
+    def ref(self):
+        return self._actor.ref
 
 
 class Actor(object):
-    def __init__(self, role, *, loop, p, name):
+    def __init__(self, role, props, *, name, loop):
         self._role = role
+        self._props = props
+        self._name = name
         self._loop = loop
-        self.p = p
-        self.name = name
         self._q = asyncio.Queue(loop=loop)
-        self.contexts = {}
-        self._logger = logging.Logger(f'{role.name}/{name}')
+        self._contexts = {}
+        self._logger = logging.Logger(repr(self))
+
+    def __repr__(self):
+        return f'{self._role.name}/{self.name}'
+
+    @property
+    def props(self):
+        return self._props
+
+    @property
+    def contexts(self):
+        return self._contexts
+
+    @property
+    def name(self):
+        return self._name
+
+    @property
+    def ref(self):
+        return rocat.finder.find(self._role, name=self._name)
 
     def start(self):
         self._loop.call_soon_threadsafe(self._main)
@@ -52,11 +80,15 @@ class Actor(object):
             except Exception as e:
                 self._logger.exception(e)
 
-    async def _handle_envel(self, envel: rocat.message.Envelope):
+    async def _handle_envel(self, envel):
         with ActorContext(self, envel) as ctx:
             action = self._role.resolve_action(envel.msg)
             if action is not None:
-                action(ctx)
+                ret = action(ctx, envel.msg)
+                if asyncio.iscoroutine(ret):
+                    await ret
+            else:
+                self._logger.error(f'No handler for {repr(envel.msg)}')
 
     def create_ref(self):
         return rocat.ref.LocalActorRef(self._q, self._loop)
