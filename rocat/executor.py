@@ -14,7 +14,7 @@ def _executor_loop(executor):
 class ActorExecutor(object):
     def __init__(self):
         self._loop: asyncio.AbstractEventLoop = asyncio.new_event_loop()
-        self._thread = threading.Thread(target=_executor_loop, args=self)
+        self._thread = threading.Thread(target=_executor_loop, args=[self])
 
     @property
     def loop(self):

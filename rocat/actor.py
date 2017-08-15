@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import weakref
 
 import rocat.message
 import rocat.role
@@ -8,6 +9,12 @@ import rocat.finder
 
 
 class ActorContext(object):
+    contexts = {}
+
+    @classmethod
+    def current(cls):
+        return cls.contexts.get(asyncio.Task.current_task())
+
     def __init__(self, actor, envel):
         self._actor = actor
         self._envel = envel
@@ -15,9 +22,12 @@ class ActorContext(object):
 
     def __enter__(self):
         self._task = asyncio.Task.current_task()
+        self.contexts[self._task] = self
         self._actor.contexts[self._task] = self
+        return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        self.contexts.pop(self._task)
         self._actor.contexts.pop(self._task)
 
     @property
@@ -67,7 +77,7 @@ class Actor(object):
         return rocat.finder.find(self._role, name=self._name)
 
     def start(self):
-        self._loop.call_soon_threadsafe(self._main)
+        asyncio.ensure_future(self._main(), loop=self._loop)
 
     async def _main(self):
         while True:
@@ -76,7 +86,7 @@ class Actor(object):
                 assert isinstance(envel, rocat.message.Envelope)
                 if envel.type == rocat.message.MsgType.TERMINAL:
                     break
-                self._loop.call_soon(self._handle_envel, envel)
+                asyncio.ensure_future(self._handle_envel(envel), loop=self._loop)
             except Exception as e:
                 self._logger.exception(e)
 
