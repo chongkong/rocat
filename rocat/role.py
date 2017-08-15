@@ -35,27 +35,26 @@ class BaseActorRole(object):
 
 
 class DictFieldRole(BaseActorRole):
-    def __init__(self, name, *, router='type'):
+    def __init__(self, name, *, field='type'):
         super().__init__(name)
-        self.router = router
-        self.routes = {}
-        self.default_route = None
+        self._field = field
+        self._routes = {}
+        self._default_route = None
 
     def route(self, field_value: str):
         def deco(f):
-            self.routes[field_value] = f
+            self._routes[field_value] = f
             return f
         return deco
 
     def default_route(self, f):
-        self.default_route = f
+        self._default_route = f
         return f
 
     def resolve_action(self, m):
         if isinstance(m, dict):
-            if self.router in m:
-                route = m[self.router]
-                if route in self.routes:
-                    return self.routes[route]
-                else:
-                    return self.default_route
+            if self._field in m:
+                route = m[self._field]
+                if route in self._routes:
+                    return self._routes[route]
+            return self._default_route

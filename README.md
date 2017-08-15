@@ -10,19 +10,30 @@ Currently on extremely early development stage
 
 In rocat, you define _role_ of the actor, instead of defining actor itself.
 _Role_ defines how you'd react to the incoming messages.
-Your code style would be more Flask-like in this way.
+You can define role in Flask-like style.
 
 ```python
 import rocat
 
-greeter_role = rocat.DictFieldRole('greeter', router='name')
+greeter_role = rocat.DictFieldRole('greeter', field='name')
 
-@greeter_role.route('chongkong')
-def greet_chongkong(ctx, msg):
-    ctx.sender.tell('hello, handsome chongkong')
+@greeter_role.default_route
+def greet(ctx, msg):
+    name = msg.get('name', 'stranger')
+    ctx.sender.tell(f'Welcome, {name}')
+
+@greeter_role.route('john')
+def greet_john(ctx, msg):
+    ctx.sender.tell('How dare you come here, John!')
 ```
 
-Once you have created a role, you need on event loop executor called `ActorExecutor` to run your actor.
+By using `DictFieldRole`, you can route `dict`-type message based on the field value of the given field (`"name"` in this example).
+You can create your own `Role` class if you want.
+Messages are routed to _action_ functions, which take two arguments: `ActorContext` and message, and return nothing.
+Message can have any type, as long as you can handle them properly.
+You can also define _action_ function as a coroutine function (using `async def`.)
+ 
+Once you have created a role, you need an event loop executor called `ActorExecutor` to run your actor.
 
 ```python
 executor = rocat.ActorExecutor()
@@ -42,8 +53,7 @@ You have to `await` the reply from the actor.
 
 ```python
 async def test():
-    resp = await greeter.ask({'name': 'chongkong'})
-    print(resp)
+    print(await greeter.ask({'name': 'chongkong'}))  # would print "Welcome, chongkong"
+    print(await greeter.ask({}))                     # would print "Welcome, stranger"
+    print(await greeter.ask({'name': 'john'}))       # would print "How dare you come here, John!"
 ```
-
-This would print `"hello, handsome chongkong"`
