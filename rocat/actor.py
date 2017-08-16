@@ -1,6 +1,6 @@
 import asyncio
 import logging
-import weakref
+from typing import Optional
 
 import rocat.message
 import rocat.role
@@ -12,10 +12,10 @@ class ActorContext(object):
     contexts = {}
 
     @classmethod
-    def current(cls):
+    def current(cls) -> 'ActorContext':
         return cls.contexts.get(asyncio.Task.current_task())
 
-    def __init__(self, actor, envel):
+    def __init__(self, actor: Actor, envel: Optional[rocat.message.Envelope]):
         self._actor = actor
         self._envel = envel
         self._task = None
@@ -47,6 +47,10 @@ class ActorContext(object):
     def ref(self):
         return self._actor.ref
 
+    @property
+    def default_timeout(self):
+        return self._actor.default_timeout
+
 
 class Actor(object):
     def __init__(self, role, props, *, name, loop):
@@ -76,6 +80,10 @@ class Actor(object):
     @property
     def ref(self):
         return rocat.finder.find(self._role, name=self._name)
+
+    @property
+    def default_timeout(self):
+        return self._role.default_timeout
 
     def start(self):
         asyncio.ensure_future(self._main(), loop=self._loop)
@@ -109,6 +117,8 @@ class Actor(object):
                         await ret
                 except Exception as e:
                     self._logger.exception(e)
+                    if envel.need_reply:
+                        ctx.sender.error(e)
                     self._run_hook('on_exception', e)
             else:
                 self._logger.error(f'No handler for {repr(envel.msg)}')

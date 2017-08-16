@@ -1,5 +1,6 @@
 import rocat.role
 import rocat.actor
+import rocat.ref
 
 
 # role_name -> actor_name -> actor_ref
@@ -13,7 +14,7 @@ def register(role, actor):
     return ref
 
 
-def find(role, *, name=None):
+def find(role, *, name=None) -> rocat.ref.BaseActorRef:
     """ Find actor_ref of given role and actor name """
     if isinstance(role, rocat.role.BaseActorRole):
         role = role.name
