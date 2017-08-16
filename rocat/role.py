@@ -14,10 +14,50 @@ def find_role(role_name):
 
 
 class BaseActorRole(object):
-    def __init__(self, name):
+    """ActorRole is a blueprint of actor.
+    You can define a lifecycle hook of the actor, and how you'd react to the
+    incoming messages by implementing resolve_action"""
+
+    def __init__(self, name, default_timeout=None):
         assert name not in _roles, f'Role name "{name}" is already used'
         _roles[name] = self
-        self.name = name
+        self._name = name
+        self._default_timeout = default_timeout
+        self._hooks = {}
+
+    @property
+    def name(self):
+        """Unique name of this actor role"""
+        return self._name
+
+    @property
+    def default_timeout(self):
+        """Default timeout seconds when asking to other actors.
+        None means no timeout is used and wait forever"""
+        return self._default_timeout
+
+    @property
+    def hooks(self):
+        """Return registered hooks"""
+        return self._hooks
+
+    def _hook_decorator(self, name):
+        def deco(f):
+            self._hooks[name] = f
+            return f
+        return deco
+
+    def on_created(self):
+        """Register on_created lifecycle hook"""
+        return self._hook_decorator('on_created')
+
+    def on_exception(self):
+        """Register on_exception lifecycle hook"""
+        return self._hook_decorator('on_exception')
+
+    def before_die(self):
+        """Register before_die lifecycle hook"""
+        return self._hook_decorator('before_die')
 
     def resolve_action(self, m):
         raise NotImplementedError
@@ -35,8 +75,8 @@ class BaseActorRole(object):
 
 
 class DictFieldRole(BaseActorRole):
-    def __init__(self, name, *, field='type'):
-        super().__init__(name)
+    def __init__(self, name, field='type', **kwargs):
+        super().__init__(name, **kwargs)
         self._field = field
         self._routes = {}
         self._default_route = None

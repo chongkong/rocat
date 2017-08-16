@@ -32,7 +32,8 @@ class ActorContext(object):
 
     @property
     def sender(self):
-        return self._envel.sender
+        if self._envel is not None:
+            return self._envel.sender
 
     @property
     def p(self):
@@ -79,24 +80,36 @@ class Actor(object):
     def start(self):
         asyncio.ensure_future(self._main(), loop=self._loop)
 
+    async def _run_hook(self, name, *args):
+        ctx = ActorContext.current()
+        if name in self._role.hooks:
+            ret = self._role.hooks[name](ctx, *args)
+            if asyncio.iscoroutine(ret):
+                await ret
+
     async def _main(self):
+        with ActorContext(self, None) as ctx:
+            self._run_hook('on_created')
         while True:
-            try:
-                envel = await self._q.get()
-                assert isinstance(envel, rocat.message.Envelope)
-                if envel.type == rocat.message.MsgType.TERMINAL:
-                    break
-                asyncio.ensure_future(self._handle_envel(envel), loop=self._loop)
-            except Exception as e:
-                self._logger.exception(e)
+            envel = await self._q.get()
+            assert isinstance(envel, rocat.message.Envelope)
+            if envel.type == rocat.message.MsgType.TERMINAL:
+                break
+            asyncio.ensure_future(self._handle_envel(envel), loop=self._loop)
+        with ActorContext(self, None) as ctx:
+            self._run_hook('before_die')
 
     async def _handle_envel(self, envel):
         with ActorContext(self, envel) as ctx:
             action = self._role.resolve_action(envel.msg)
             if action is not None:
-                ret = action(ctx, envel.msg)
-                if asyncio.iscoroutine(ret):
-                    await ret
+                try:
+                    ret = action(ctx, envel.msg)
+                    if asyncio.iscoroutine(ret):
+                        await ret
+                except Exception as e:
+                    self._logger.exception(e)
+                    self._run_hook('on_exception', e)
             else:
                 self._logger.error(f'No handler for {repr(envel.msg)}')
 
